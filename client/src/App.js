@@ -9,28 +9,37 @@ import "./App.css";
 export default class App extends React.Component {
 	state = {
 		ipfsHash: null,
-		storageValue: 0,
-		web3: null,
-		accounts: null,
-		contract: null,
+		// web3: null,
+		// contract: null,
+		account: null,
 		buffer: null
 	};
 
 	componentDidMount = async () => {
 		try {
-			// Get network provider and web3 instance.
-			const web3 = await getWeb3();
+			const contract = require('truffle-contract')
+				,fileStorage = contract(SimpleStorageContract)
 
-			// Use web3 to get the user's accounts.
-			const accounts = await web3.eth.getAccounts();
+			fileStorage.setProvider(this.state.web3.currentProvider);
 
-			// Get the contract instance.
-			const networkId = await web3.eth.net.getId();
-			const deployedNetwork = SimpleStorageContract.networks[networkId];
-			const instance = new web3.eth.Contract(
-			SimpleStorageContract.abi,
-			deployedNetwork && deployedNetwork.address,
-			);
+			this.state.web3.eth.getAccounts((err,accounts) => {
+				if (err) {
+					console.log(err);
+					return;
+				}
+				try {
+					const instance = await fileStorage.deployed();
+					this.fileStorageInstance = instance;
+
+					this.setState({account: accounts[0]});
+
+					const result = await this.simpleStorageInstance.get.call(accounts[0]);
+					return this.setState({ipfsHash: result});
+				}
+				catch(e) {
+					console.log(e)
+				}
+			})
 
 			// Set web3, accounts, and contract to the state, and then proceed with an
 			// example of interacting with the contract's methods.
@@ -70,7 +79,7 @@ export default class App extends React.Component {
 		}
 	}
 
-	onSubmit = (event) => {
+	onSubmit = async (event) => {
 		event.preventDefault();
 		
 		IPFSInstance.files.add(this.state.buffer, (err,result) => {
@@ -78,8 +87,16 @@ export default class App extends React.Component {
 				console.log(err)
 				return;
 			}
-			this.setState({ipfsHash: result[0].hash})
-			console.log('ipfsHash',this.state.ipfsHash)
+			try {
+				result = await this.fileStorageInstance.set(result[0].hash, {from: this.state.account})
+
+				const value = await this.fileStorageInstance.get.call(this.state.account)
+				this.setState({ipfsHash: value})
+				console.log('ipfsHash',this.state.ipfsHash)
+			}
+			catch(e) {
+				console.log(e)
+			}
 		});
 	}
 
