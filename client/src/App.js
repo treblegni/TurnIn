@@ -1,5 +1,5 @@
 import React from "react";
-import SimpleStorageContract from "./contracts/SimpleStorage.json";
+import FileStorageContract from "./contracts/SimpleStorage.json";
 import getWeb3 from "./getWeb3";
 
 import IPFSInstance from './ipfs';
@@ -9,62 +9,53 @@ import "./App.css";
 export default class App extends React.Component {
 	state = {
 		ipfsHash: null,
-		// web3: null,
-		// contract: null,
+		web3: null,
 		account: null,
+		contract: null,
 		buffer: null
 	};
 
-	componentDidMount = async () => {
+	componentWillMount = async () => {
 		try {
-			const contract = require('truffle-contract')
-				,fileStorage = contract(SimpleStorageContract)
-
-			fileStorage.setProvider(this.state.web3.currentProvider);
-
-			this.state.web3.eth.getAccounts((err,accounts) => {
-				if (err) {
-					console.log(err);
-					return;
-				}
-				try {
-					const instance = await fileStorage.deployed();
-					this.fileStorageInstance = instance;
-
-					this.setState({account: accounts[0]});
-
-					const result = await this.simpleStorageInstance.get.call(accounts[0]);
-					return this.setState({ipfsHash: result});
-				}
-				catch(e) {
-					console.log(e)
-				}
-			})
-
-			// Set web3, accounts, and contract to the state, and then proceed with an
-			// example of interacting with the contract's methods.
-			this.setState({ web3, accounts, contract: instance }, this.runExample);
+			// Get network provider and web3 instance.
+			const web3 = await getWeb3();
+			this.setState({web3}, this.initiateContract);
 		} catch (error) {
 			// Catch any errors for any of the above operations.
 			alert(
-			`Failed to load web3, accounts, or contract. Check console for details.`,
+				`Failed to load web3.`,
 			);
 			console.error(error);
 		}
 	};
+	//initiates the contract that will manage the transaction for storage
+	initiateContract = () => {
+		//uses truffle-contract library to create JS representation of a smart contract
+		const contract = require('truffle-contract')
+			,fileStorage = contract(FileStorageContract)
 
-  // runExample = async () => {
-  //   const { accounts, contract } = this.state;
+		fileStorage.setProvider(this.state.web3.currentProvider);
 
-  //   // Stores a given value, 5 by default.
-  //   await contract.methods.set(5).send({ from: accounts[0] });
+		this.state.web3.eth.getAccounts((err,accounts) => {
+			if (err) {
+				console.log(err);
+				return;
+			}
+			fileStorage.deployed()
+				.then(instance => {
+					this.setState({contract: instance,account: accounts[0]});
 
-  //   // Get the value from the contract to prove it worked.
-  //   const response = await contract.methods.get().call();
-
-  //   // Update state with the result.
-  //   this.setState({ storageValue: response });
-  // };
+					return this.state.contract.get.call(this.state.account);
+				})
+				.then(result => {
+					this.setState({ipfsHash: result});
+				})
+				.catch((e)=> {
+					console.log(e)
+					return;
+				})
+		})
+	}
 
 	getSelectedFile = (event) => {
 		event.preventDefault();
@@ -79,7 +70,7 @@ export default class App extends React.Component {
 		}
 	}
 
-	onSubmit = async (event) => {
+	onSubmit = (event) => {
 		event.preventDefault();
 		
 		IPFSInstance.files.add(this.state.buffer, (err,result) => {
@@ -87,16 +78,18 @@ export default class App extends React.Component {
 				console.log(err)
 				return;
 			}
-			try {
-				result = await this.fileStorageInstance.set(result[0].hash, {from: this.state.account})
-
-				const value = await this.fileStorageInstance.get.call(this.state.account)
-				this.setState({ipfsHash: value})
-				console.log('ipfsHash',this.state.ipfsHash)
-			}
-			catch(e) {
-				console.log(e)
-			}
+			this.state.contract.set(result[0].hash, {from: this.state.account})
+				.then(response => {
+					return this.state.contract.get.call(this.state.account);
+				})
+				.then(ipfsHash => {
+					this.setState({ipfsHash});
+					console.log('ipfsHash',this.state.ipfsHash);
+				})
+				.catch(e => {
+					console.log(e);
+					return;
+				})
 		});
 	}
 
