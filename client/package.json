@@ -6,7 +6,7 @@
     "ipfs-api": "^26.1.2",
     "react": "16.11.0",
     "react-dom": "16.11.0",
-    "react-scripts": "^3.4.1",
+    "react-scripts": "^5.0.1",
     "truffle-contract": "^4.0.31",
     "web3": "1.2.2"
   },
